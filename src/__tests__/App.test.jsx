@@ -169,17 +169,18 @@ describe("ノード操作", () => {
 describe("localStorage 永続化", () => {
   it("初期データがlocalStorageに保存される", () => {
     render(<App />);
-    const saved = JSON.parse(localStorage.getItem("ct-tool-data"));
+    const saved = JSON.parse(localStorage.getItem("ct-tool-projects"));
     expect(saved).not.toBeNull();
-    expect(saved.trees).toHaveLength(2);
+    expect(saved.projects[0].trees).toHaveLength(2);
   });
 
   it("テストケース追加後にlocalStorageが更新される", async () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByText("＋ テストケース追加"));
-    const saved = JSON.parse(localStorage.getItem("ct-tool-data"));
-    expect(saved.testCases).toHaveLength(4);
+    const saved = JSON.parse(localStorage.getItem("ct-tool-projects"));
+    const activeProject = saved.projects.find(p => p.id === saved.activeId);
+    expect(activeProject.testCases).toHaveLength(4);
   });
 
   it("ページ再読み込みを模して保存済みデータを復元する", async () => {

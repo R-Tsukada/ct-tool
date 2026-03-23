@@ -7,54 +7,65 @@ import {
 } from "./treeHelpers";
 import TreeCanvas from "./TreeCanvas";
 import MatrixTable from "./MatrixTable";
+import Sidebar from "./Sidebar";
 
 // ── ID generation ─────────────────────────────────────────────────
 let _uid = 2000;
 const uid = () => `u${_uid++}`;
 
 // ── Initial data ──────────────────────────────────────────────────
-const INIT = {
-  trees: [
-    { id: "t1", root: { id: "n1", name: "分類1", children: [
-      { id: "n2", name: "値A", children: [] },
-      { id: "n3", name: "値B", children: [] },
-    ]}},
-    { id: "t2", root: { id: "n4", name: "分類2", children: [
-      { id: "n5", name: "値A", children: [] },
-      { id: "n6", name: "値B", children: [] },
-    ]}},
-  ],
-  testCases: [
-    { id: "tc1", sel: {} },
-    { id: "tc2", sel: {} },
-    { id: "tc3", sel: {} },
-  ],
-};
+const INIT_TREES = [
+  { id: "t1", root: { id: "n1", name: "分類1", children: [
+    { id: "n2", name: "値A", children: [] },
+    { id: "n3", name: "値B", children: [] },
+  ]}},
+  { id: "t2", root: { id: "n4", name: "分類2", children: [
+    { id: "n5", name: "値A", children: [] },
+    { id: "n6", name: "値B", children: [] },
+  ]}},
+];
+const INIT_TEST_CASES = [
+  { id: "tc1", sel: {} },
+  { id: "tc2", sel: {} },
+  { id: "tc3", sel: {} },
+];
 
-const STORAGE_KEY = "ct-tool-data";
+const PROJECTS_KEY = "ct-tool-projects";
+const LEGACY_KEY   = "ct-tool-data";
 
-function loadData() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (!saved) return INIT;
-    const data = JSON.parse(saved);
-    // _uid を既存IDの最大値より大きくして衝突を防ぐ
-    function scanIds(obj) {
-      if (!obj || typeof obj !== "object") return;
-      if (typeof obj.id === "string" && obj.id.startsWith("u")) {
-        const n = parseInt(obj.id.slice(1));
-        if (!isNaN(n) && n >= _uid) _uid = n + 1;
-      }
-      for (const v of Object.values(obj)) {
-        if (Array.isArray(v)) v.forEach(scanIds);
-        else if (v && typeof v === "object") scanIds(v);
-      }
-    }
-    scanIds(data);
-    return data;
-  } catch {
-    return INIT;
+function scanIds(obj) {
+  if (!obj || typeof obj !== "object") return;
+  if (typeof obj.id === "string" && obj.id.startsWith("u")) {
+    const n = parseInt(obj.id.slice(1));
+    if (!isNaN(n) && n >= _uid) _uid = n + 1;
   }
+  for (const v of Object.values(obj)) {
+    if (Array.isArray(v)) v.forEach(scanIds);
+    else if (v && typeof v === "object") scanIds(v);
+  }
+}
+
+function loadStore() {
+  try {
+    // 新形式
+    const saved = localStorage.getItem(PROJECTS_KEY);
+    if (saved) {
+      const store = JSON.parse(saved);
+      store.projects.forEach(scanIds);
+      return store;
+    }
+    // 旧形式からマイグレーション
+    const legacy = localStorage.getItem(LEGACY_KEY);
+    if (legacy) {
+      const old = JSON.parse(legacy);
+      scanIds(old);
+      const project = { id: uid(), name: "デフォルト", trees: old.trees, testCases: old.testCases };
+      return { activeId: project.id, projects: [project] };
+    }
+  } catch { /* fall through */ }
+  // 初期データ
+  const project = { id: "p1", name: "プロジェクト1", trees: INIT_TREES, testCases: INIT_TEST_CASES };
+  return { activeId: "p1", projects: [project] };
 }
 
 function treeToMd(node, depth = 0) {
@@ -65,7 +76,7 @@ function treeToMd(node, depth = 0) {
 
 // ── App ───────────────────────────────────────────────────────────
 export default function App() {
-  const [data, setData]           = useState(loadData);
+  const [store, setStore]         = useState(loadStore);
   const [editing, setEditing]     = useState(null);
   const [drag, setDrag]           = useState(null);
   const [copied, setCopied]       = useState(false);
@@ -78,7 +89,25 @@ export default function App() {
   // Stable refs to avoid stale closures in drag handlers
   const dragRef     = useRef(null);
   const allNodesRef = useRef([]);
-  const dataRef     = useRef(data);
+  const dataRef     = useRef(null);
+
+  // ── Active project ───────────────────────────────────────────────
+  const data = useMemo(() => {
+    const p = store.projects.find(p => p.id === store.activeId);
+    return { trees: p?.trees ?? [], testCases: p?.testCases ?? [] };
+  }, [store]);
+
+  // setData: アクティブプロジェクトの trees/testCases のみ更新
+  const setData = useCallback((fn) => {
+    setStore(s => ({
+      ...s,
+      projects: s.projects.map(p =>
+        p.id === s.activeId
+          ? { ...p, ...fn({ trees: p.trees, testCases: p.testCases }) }
+          : p
+      ),
+    }));
+  }, []);
 
   // ── Layout ──────────────────────────────────────────────────────
   const layout = useMemo(() => {
@@ -115,7 +144,7 @@ export default function App() {
   useEffect(() => { allNodesRef.current = allNodes; },  [allNodes]);
   useEffect(() => { dataRef.current = data; },          [data]);
 
-  useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }, [data]);
+  useEffect(() => { localStorage.setItem(PROJECTS_KEY, JSON.stringify(store)); }, [store]);
   useEffect(() => { localStorage.setItem("ct-tool-node-theme", nodeTheme); }, [nodeTheme]);
 
   // ── Drag handlers ────────────────────────────────────────────────
@@ -207,7 +236,7 @@ export default function App() {
   // ── Data handlers ────────────────────────────────────────────────
   const toggle    = useCallback((tcId, leafId) =>
     setData(d => ({ ...d, testCases: d.testCases.map(tc =>
-      tc.id === tcId ? { ...tc, sel: { ...tc.sel, [leafId]: !tc.sel[leafId] } } : tc) })), []);
+      tc.id === tcId ? { ...tc, sel: { ...tc.sel, [leafId]: !tc.sel[leafId] } } : tc) })), [setData]);
 
   const startEdit  = useCallback((nodeId, treeId, name) => setEditing({ nodeId, treeId, value: name }), []);
   const commitEdit = useCallback(() => {
@@ -216,19 +245,19 @@ export default function App() {
     setData(d => ({ ...d, trees: d.trees.map(t =>
       t.id === treeId ? { ...t, root: updateNode(t.root, nodeId, n => ({ ...n, name: value })) } : t) }));
     setEditing(null);
-  }, [editing]);
+  }, [editing, setData]);
 
   const addChild  = useCallback((treeId, nodeId) =>
     setData(d => ({ ...d, trees: d.trees.map(t =>
       t.id === treeId ? { ...t, root: updateNode(t.root, nodeId, n =>
-        ({ ...n, children: [...(n.children || []), { id: uid(), name: "新規", children: [] }] })) } : t) })), []);
+        ({ ...n, children: [...(n.children || []), { id: uid(), name: "新規", children: [] }] })) } : t) })), [setData]);
 
   const delNode   = useCallback((treeId, nodeId) =>
     setData(d => ({ ...d, trees: d.trees.map(t =>
-      t.id === treeId ? { ...t, root: deleteNodeFrom(t.root, nodeId) } : t) })), []);
+      t.id === treeId ? { ...t, root: deleteNodeFrom(t.root, nodeId) } : t) })), [setData]);
 
   const delTree   = useCallback((treeId) =>
-    setData(d => ({ ...d, trees: d.trees.filter(t => t.id !== treeId) })), []);
+    setData(d => ({ ...d, trees: d.trees.filter(t => t.id !== treeId) })), [setData]);
 
   const addTree   = useCallback(() => {
     const [i1, i2, i3] = [uid(), uid(), uid()];
@@ -237,13 +266,13 @@ export default function App() {
         { id: i2, name: "値A", children: [] },
         { id: i3, name: "値B", children: [] },
       ]}}]}));
-  }, []);
+  }, [setData]);
 
   const addTC     = useCallback(() =>
-    setData(d => ({ ...d, testCases: [...d.testCases, { id: uid(), sel: {} }] })), []);
+    setData(d => ({ ...d, testCases: [...d.testCases, { id: uid(), sel: {} }] })), [setData]);
 
   const delTC     = useCallback((tcId) =>
-    setData(d => ({ ...d, testCases: d.testCases.filter(tc => tc.id !== tcId) })), []);
+    setData(d => ({ ...d, testCases: d.testCases.filter(tc => tc.id !== tcId) })), [setData]);
 
   const exportMarkdown = useCallback(() => {
     const treeNameMap = Object.fromEntries(data.trees.map(t => [t.id, t.root.name]));
@@ -265,6 +294,40 @@ export default function App() {
     });
   }, [data, layout]);
 
+  // ── Project handlers ─────────────────────────────────────────────
+  const switchProject = useCallback((id) => {
+    setEditing(null);
+    setDrag(null);
+    setStore(s => ({ ...s, activeId: id }));
+  }, []);
+
+  const addProject = useCallback(() => {
+    const id = uid();
+    const project = {
+      id,
+      name: `プロジェクト${Date.now().toString().slice(-4)}`,
+      trees: [{ id: uid(), root: { id: uid(), name: "新規分類", children: [
+        { id: uid(), name: "値A", children: [] },
+        { id: uid(), name: "値B", children: [] },
+      ]}}],
+      testCases: [{ id: uid(), sel: {} }],
+    };
+    setStore(s => ({ activeId: id, projects: [...s.projects, project] }));
+  }, []);
+
+  const renameProject = useCallback((id, name) => {
+    setStore(s => ({ ...s, projects: s.projects.map(p => p.id === id ? { ...p, name } : p) }));
+  }, []);
+
+  const deleteProject = useCallback((id) => {
+    setStore(s => {
+      if (s.projects.length <= 1) return s;
+      const next = s.projects.filter(p => p.id !== id);
+      const activeId = s.activeId === id ? next[0].id : s.activeId;
+      return { activeId, projects: next };
+    });
+  }, []);
+
   // ── Footer stats ─────────────────────────────────────────────────
   const leafIds      = useMemo(() => new Set(layout.allLeaves.map(l => l.id)), [layout]);
   const selectedDots = useMemo(() =>
@@ -277,84 +340,95 @@ export default function App() {
     <div style={{
       fontFamily: "system-ui, -apple-system, sans-serif",
       background: "#FAFAFA", minHeight: "100vh",
-      padding: "20px 24px", color: "#18181B",
+      display: "flex",
+      color: "#18181B",
       userSelect: drag ? "none" : "auto",
     }}>
-      {/* Drag ghost */}
-      {drag && (
-        <div style={{
-          position: "fixed", left: drag.ghostX + 16, top: drag.ghostY - 20,
-          zIndex: 9999, pointerEvents: "none",
-          padding: "5px 12px", borderRadius: 7,
-          background: "#18181B", color: "#FAFAFA",
-          fontSize: 11, fontWeight: 700, whiteSpace: "nowrap",
-        }}>
-          ⠿ {drag.ghostName}
-          {drag.targetId
-            ? <span style={{ marginLeft: 8, opacity: 0.7, fontSize: 10 }}>→ ドロップ可</span>
-            : <span style={{ marginLeft: 8, opacity: 0.4, fontSize: 10 }}>…</span>
-          }
-        </div>
-      )}
+      <Sidebar
+        store={store}
+        onSwitch={switchProject}
+        onAdd={addProject}
+        onRename={renameProject}
+        onDelete={deleteProject}
+      />
 
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 22 }}>
-        <div>
-          <div style={{ fontSize: 11, color: "#A1A1AA", letterSpacing: "0.12em", marginBottom: 2 }}>TEST DESIGN TOOL</div>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#18181B" }}>Classification Tree</h1>
-        </div>
-        <div style={{ flex: 1 }} />
-        <div style={{ display: "flex", border: "1px solid #E4E4E7", borderRadius: 6, overflow: "hidden", fontSize: 12 }}>
-          {["minimal", "color"].map(t => (
-            <button key={t} onClick={() => setNodeTheme(t)} style={{
-              padding: "7px 14px", border: "none", cursor: "pointer",
-              backgroundColor: nodeTheme === t ? "#18181B" : "transparent",
-              color: nodeTheme === t ? "#FFFFFF" : "#71717A",
-            }}>
-              {t === "minimal" ? "ミニマル" : "カラー"}
-            </button>
-          ))}
-        </div>
-        <button onClick={exportMarkdown} style={{ padding: "7px 16px", borderRadius: 6, border: "1px solid #E4E4E7", backgroundColor: "transparent", color: copied ? "#6366F1" : "#71717A", cursor: "pointer", fontSize: 12 }}>
-          {copied ? "✓ コピー済み" : "MD コピー"}
-        </button>
-        <button onClick={addTree} style={{ padding: "7px 16px", borderRadius: 6, border: "1px solid #E4E4E7", backgroundColor: "transparent", color: "#18181B", cursor: "pointer", fontSize: 12 }}>
-          ＋ 分類追加
-        </button>
-      </div>
+      <main style={{ flex: 1, padding: "20px 24px", minWidth: 0 }}>
+        {/* Drag ghost */}
+        {drag && (
+          <div style={{
+            position: "fixed", left: drag.ghostX + 16, top: drag.ghostY - 20,
+            zIndex: 9999, pointerEvents: "none",
+            padding: "5px 12px", borderRadius: 7,
+            background: "#18181B", color: "#FAFAFA",
+            fontSize: 11, fontWeight: 700, whiteSpace: "nowrap",
+          }}>
+            ⠿ {drag.ghostName}
+            {drag.targetId
+              ? <span style={{ marginLeft: 8, opacity: 0.7, fontSize: 10 }}>→ ドロップ可</span>
+              : <span style={{ marginLeft: 8, opacity: 0.4, fontSize: 10 }}>…</span>
+            }
+          </div>
+        )}
 
-      {/* Instructions */}
-      <div style={{ fontSize: 11, color: "#A1A1AA", marginBottom: 16, display: "flex", gap: 16, flexWrap: "wrap" }}>
-        <span><span style={{ color: "#18181B", fontWeight: 600 }}>太枠</span> = 分類ルート</span>
-        <span><span style={{ color: "#F97316" }}>ドラッグ</span>でノード移動 ／ クリックで名前編集 ／ ホバーで＋／✕</span>
-        <span>● マトリクスをクリックで点を打てます</span>
-      </div>
-
-      {/* Main canvas */}
-      <div ref={outerRef} style={{ overflowX: "auto" }}>
-        <div style={{ display: "inline-block", minWidth: "max-content" }}>
-          <TreeCanvas
-            layout={layout} treeContainerRef={treeContainerRef}
-            svgW={svgW} svgH={svgH}
-            nodeTheme={nodeTheme} editing={editing} drag={drag}
-            onMouseDown={handleNodeMouseDown}
-            onStartEdit={startEdit} onCommitEdit={commitEdit} onSetEditing={setEditing}
-            onAddChild={addChild} onDeleteNode={delNode} onDeleteTree={delTree}
-          />
-          <MatrixTable
-            layout={layout} testCases={data.testCases}
-            onToggle={toggle} onAddTC={addTC} onDelTC={delTC}
-          />
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 22 }}>
+          <div>
+            <div style={{ fontSize: 11, color: "#A1A1AA", letterSpacing: "0.12em", marginBottom: 2 }}>TEST DESIGN TOOL</div>
+            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#18181B" }}>Classification Tree</h1>
+          </div>
+          <div style={{ flex: 1 }} />
+          <div style={{ display: "flex", border: "1px solid #E4E4E7", borderRadius: 6, overflow: "hidden", fontSize: 12 }}>
+            {["minimal", "color"].map(t => (
+              <button key={t} onClick={() => setNodeTheme(t)} style={{
+                padding: "7px 14px", border: "none", cursor: "pointer",
+                backgroundColor: nodeTheme === t ? "#18181B" : "transparent",
+                color: nodeTheme === t ? "#FFFFFF" : "#71717A",
+              }}>
+                {t === "minimal" ? "ミニマル" : "カラー"}
+              </button>
+            ))}
+          </div>
+          <button onClick={exportMarkdown} style={{ padding: "7px 16px", borderRadius: 6, border: "1px solid #E4E4E7", backgroundColor: "transparent", color: copied ? "#6366F1" : "#71717A", cursor: "pointer", fontSize: 12 }}>
+            {copied ? "✓ コピー済み" : "MD コピー"}
+          </button>
+          <button onClick={addTree} style={{ padding: "7px 16px", borderRadius: 6, border: "1px solid #E4E4E7", backgroundColor: "transparent", color: "#18181B", cursor: "pointer", fontSize: 12 }}>
+            ＋ 分類追加
+          </button>
         </div>
-      </div>
 
-      {/* Footer */}
-      <div style={{ marginTop: 20, fontSize: 11, color: "#D4D4D8", display: "flex", gap: 20 }}>
-        <span>分類: {data.trees.length}</span>
-        <span>葉ノード: {layout.allLeaves.length}</span>
-        <span>テストケース: {data.testCases.length}</span>
-        <span>選択済みドット: {selectedDots}</span>
-      </div>
+        {/* Instructions */}
+        <div style={{ fontSize: 11, color: "#A1A1AA", marginBottom: 16, display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <span><span style={{ color: "#18181B", fontWeight: 600 }}>太枠</span> = 分類ルート</span>
+          <span><span style={{ color: "#F97316" }}>ドラッグ</span>でノード移動 ／ クリックで名前編集 ／ ホバーで＋／✕</span>
+          <span>● マトリクスをクリックで点を打てます</span>
+        </div>
+
+        {/* Main canvas */}
+        <div ref={outerRef} style={{ overflowX: "auto" }}>
+          <div style={{ display: "inline-block", minWidth: "max-content" }}>
+            <TreeCanvas
+              layout={layout} treeContainerRef={treeContainerRef}
+              svgW={svgW} svgH={svgH}
+              nodeTheme={nodeTheme} editing={editing} drag={drag}
+              onMouseDown={handleNodeMouseDown}
+              onStartEdit={startEdit} onCommitEdit={commitEdit} onSetEditing={setEditing}
+              onAddChild={addChild} onDeleteNode={delNode} onDeleteTree={delTree}
+            />
+            <MatrixTable
+              layout={layout} testCases={data.testCases}
+              onToggle={toggle} onAddTC={addTC} onDelTC={delTC}
+            />
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ marginTop: 20, fontSize: 11, color: "#D4D4D8", display: "flex", gap: 20 }}>
+          <span>分類: {data.trees.length}</span>
+          <span>葉ノード: {layout.allLeaves.length}</span>
+          <span>テストケース: {data.testCases.length}</span>
+          <span>選択済みドット: {selectedDots}</span>
+        </div>
+      </main>
     </div>
   );
 }
