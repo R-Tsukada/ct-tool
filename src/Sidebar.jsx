@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-export default function Sidebar({ store, onSwitch, onAdd, onRename, onDelete }) {
+export default function Sidebar({ store, onSwitch, onAdd, onRename, onDelete, onClose }) {
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState("");
   const [hoveredId, setHoveredId] = useState(null);
@@ -30,8 +30,13 @@ export default function Sidebar({ store, onSwitch, onAdd, onRename, onDelete }) 
       display: "flex", flexDirection: "column",
       minHeight: "100vh",
     }}>
-      <div style={{ padding: "20px 16px 12px", borderBottom: "1px solid #E4E4E7" }}>
-        <div style={{ fontSize: 10, color: "#A1A1AA", letterSpacing: "0.1em", marginBottom: 4 }}>PROJECTS</div>
+      <div style={{ padding: "12px 16px", borderBottom: "1px solid #E4E4E7", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ fontSize: 10, color: "#A1A1AA", letterSpacing: "0.1em" }}>PROJECTS</div>
+        <button
+          title="サイドバーを閉じる"
+          onClick={onClose}
+          style={{ border: "none", background: "transparent", cursor: "pointer", color: "#A1A1AA", fontSize: 16, padding: "0 2px", lineHeight: 1 }}
+        >‹</button>
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", padding: "8px 8px" }}>

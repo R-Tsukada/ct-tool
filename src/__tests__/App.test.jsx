@@ -165,6 +165,29 @@ describe("ノード操作", () => {
   });
 });
 
+// ── サイドバー開閉 ────────────────────────────────────────────────
+describe("サイドバー開閉", () => {
+  it("初期状態でサイドバーが表示されている", () => {
+    render(<App />);
+    expect(screen.getByText("プロジェクト1")).toBeInTheDocument();
+  });
+
+  it("トグルボタンをクリックするとサイドバーが閉じる", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByTitle("サイドバーを閉じる"));
+    expect(screen.queryByText("プロジェクト1")).not.toBeInTheDocument();
+  });
+
+  it("閉じた状態でトグルボタンをクリックすると再表示される", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByTitle("サイドバーを閉じる"));
+    await user.click(screen.getByTitle("サイドバーを開く"));
+    expect(screen.getByText("プロジェクト1")).toBeInTheDocument();
+  });
+});
+
 // ── localStorage 永続化 ───────────────────────────────────────────
 describe("localStorage 永続化", () => {
   it("初期データがlocalStorageに保存される", () => {

@@ -82,6 +82,7 @@ export default function App() {
   const [copied, setCopied]       = useState(false);
   const [nodeTheme, setNodeTheme] = useState(() => localStorage.getItem("ct-tool-node-theme") || "minimal");
   const [containerWidth, setContainerWidth] = useState(0);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const treeContainerRef = useRef(null);
   const outerRef         = useRef(null);
@@ -346,13 +347,21 @@ export default function App() {
       color: "#18181B",
       userSelect: drag ? "none" : "auto",
     }}>
-      <Sidebar
-        store={store}
-        onSwitch={switchProject}
-        onAdd={addProject}
-        onRename={renameProject}
-        onDelete={deleteProject}
-      />
+      {sidebarOpen
+        ? <Sidebar
+            store={store}
+            onSwitch={switchProject}
+            onAdd={addProject}
+            onRename={renameProject}
+            onDelete={deleteProject}
+            onClose={() => setSidebarOpen(false)}
+          />
+        : <button
+            title="サイドバーを開く"
+            onClick={() => setSidebarOpen(true)}
+            style={sidebarToggleBtn}
+          >›</button>
+      }
 
       <main style={{ flex: 1, padding: "20px 24px", minWidth: 0 }}>
         {/* Drag ghost */}
@@ -434,3 +443,11 @@ export default function App() {
     </div>
   );
 }
+
+const sidebarToggleBtn = {
+  width: 24, flexShrink: 0, minHeight: "100vh",
+  border: "none", borderRight: "1px solid #E4E4E7",
+  background: "#F4F4F5", cursor: "pointer",
+  color: "#A1A1AA", fontSize: 16,
+  display: "flex", alignItems: "center", justifyContent: "center",
+};
