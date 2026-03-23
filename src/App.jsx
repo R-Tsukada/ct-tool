@@ -449,5 +449,6 @@ const sidebarToggleBtn = {
   border: "none", borderRight: "1px solid #E4E4E7",
   background: "#F4F4F5", cursor: "pointer",
   color: "#A1A1AA", fontSize: 16,
-  display: "flex", alignItems: "center", justifyContent: "center",
+  display: "flex", alignItems: "flex-start", justifyContent: "center",
+  paddingTop: 12,
 };
