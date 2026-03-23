@@ -380,4 +380,12 @@ describe("マトリクス列幅の整合性", () => {
       expect(th.style.paddingRight).not.toBe("3px");
     });
   });
+
+  it("tableに左ボーダーがなく、ツリーキャンバスと左端が揃う", () => {
+    render(<App />);
+    const table = document.querySelector("table");
+    // border: "1px solid" のショートハンドが展開されると borderLeft が設定される
+    // 左ボーダーがあるとテーブル全体が 1px 右にズレてツリーと不一致になる
+    expect(table.style.borderLeft).toBe("");
+  });
 });

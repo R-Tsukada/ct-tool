@@ -5,7 +5,7 @@ export default function MatrixTable({ layout, testCases, onToggle, onAddTC, onDe
 
   return (
     <>
-      <table style={{ borderCollapse: "collapse", tableLayout: "fixed", border: "1px solid #E4E4E7", borderTop: "2px solid #D4D4D8" }}>
+      <table style={{ borderCollapse: "collapse", tableLayout: "fixed", borderTop: "2px solid #D4D4D8", borderRight: "1px solid #E4E4E7", borderBottom: "1px solid #E4E4E7" }}>
         <thead>
           <tr>
             <th style={{ width: LABEL_W, minWidth: LABEL_W, padding: 0 }} />
