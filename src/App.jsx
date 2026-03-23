@@ -303,16 +303,18 @@ export default function App() {
 
   const addProject = useCallback(() => {
     const id = uid();
-    const project = {
-      id,
-      name: `プロジェクト${Date.now().toString().slice(-4)}`,
-      trees: [{ id: uid(), root: { id: uid(), name: "新規分類", children: [
-        { id: uid(), name: "値A", children: [] },
-        { id: uid(), name: "値B", children: [] },
-      ]}}],
-      testCases: [{ id: uid(), sel: {} }],
-    };
-    setStore(s => ({ activeId: id, projects: [...s.projects, project] }));
+    setStore(s => {
+      const project = {
+        id,
+        name: `プロジェクト ${s.projects.length + 1}`,
+        trees: [{ id: uid(), root: { id: uid(), name: "新規分類", children: [
+          { id: uid(), name: "値A", children: [] },
+          { id: uid(), name: "値B", children: [] },
+        ]}}],
+        testCases: [{ id: uid(), sel: {} }],
+      };
+      return { activeId: id, projects: [...s.projects, project] };
+    });
   }, []);
 
   const renameProject = useCallback((id, name) => {

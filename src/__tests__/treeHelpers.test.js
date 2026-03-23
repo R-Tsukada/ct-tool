@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   countLeaves,
+  computeLayout,
   updateNode,
   deleteNodeFrom,
   extractNode,
@@ -8,6 +9,8 @@ import {
   insertAfter,
   insertBefore,
   isAncestorOf,
+  COL_W,
+  ROW_H,
 } from "../treeHelpers.js";
 
 // ── テスト用ツリー ─────────────────────────────────────────────────
@@ -222,5 +225,108 @@ describe("isAncestorOf", () => {
 
   it("自身は祖先でない", () => {
     expect(isAncestorOf(makeTree(), "a", "a")).toBe(false);
+  });
+});
+
+// ── computeLayout ─────────────────────────────────────────────────
+describe("computeLayout", () => {
+  // 葉1枚のシンプルなツリー: root(葉)
+  const singleLeaf = { id: "r", name: "ルート", children: [] };
+
+  // 葉2枚: root → [left, right]
+  const twoLeaves = {
+    id: "r", name: "ルート", children: [
+      { id: "L", name: "左", children: [] },
+      { id: "R", name: "右", children: [] },
+    ],
+  };
+
+  // 3階層: root → [a → [a1, a2], b]  (葉: a1, a2, b)
+  const threeLevel = {
+    id: "r", name: "ルート", children: [
+      { id: "a", name: "A", children: [
+        { id: "a1", name: "A1", children: [] },
+        { id: "a2", name: "A2", children: [] },
+      ]},
+      { id: "b", name: "B", children: [] },
+    ],
+  };
+
+  it("葉1枚のルートは colOff=0 の中央に配置される", () => {
+    const nodes = computeLayout(singleLeaf, 0, "t1");
+    const root = nodes.find(n => n.id === "r");
+    expect(root.cx).toBe(COL_W / 2);
+    expect(root.cy).toBe(ROW_H / 2);
+  });
+
+  it("colOff を指定するとその分 cx がずれる", () => {
+    const base = computeLayout(singleLeaf, 0, "t1");
+    const shifted = computeLayout(singleLeaf, 3, "t1");
+    expect(shifted[0].cx - base[0].cx).toBe(3 * COL_W);
+  });
+
+  it("葉2枚のツリーでルートが中央、葉が左右に配置される", () => {
+    const nodes = computeLayout(twoLeaves, 0, "t1");
+    const root = nodes.find(n => n.id === "r");
+    const left = nodes.find(n => n.id === "L");
+    const right = nodes.find(n => n.id === "R");
+    expect(root.cx).toBe(COL_W);          // (0 + 1) * COL_W = 中央
+    expect(left.cx).toBe(COL_W / 2);      // 左葉
+    expect(right.cx).toBe(COL_W * 1.5);   // 右葉
+  });
+
+  it("depth が cx ではなく cy に反映される", () => {
+    const nodes = computeLayout(twoLeaves, 0, "t1");
+    const root = nodes.find(n => n.id === "r");
+    const leaf = nodes.find(n => n.id === "L");
+    expect(root.cy).toBe(ROW_H / 2);          // depth=0
+    expect(leaf.cy).toBe(ROW_H + ROW_H / 2);  // depth=1
+  });
+
+  it("isLeaf フラグが正しく設定される", () => {
+    const nodes = computeLayout(twoLeaves, 0, "t1");
+    expect(nodes.find(n => n.id === "r").isLeaf).toBe(false);
+    expect(nodes.find(n => n.id === "L").isLeaf).toBe(true);
+    expect(nodes.find(n => n.id === "R").isLeaf).toBe(true);
+  });
+
+  it("parentId が正しく設定される", () => {
+    const nodes = computeLayout(twoLeaves, 0, "t1");
+    expect(nodes.find(n => n.id === "r").parentId).toBeNull();
+    expect(nodes.find(n => n.id === "L").parentId).toBe("r");
+    expect(nodes.find(n => n.id === "R").parentId).toBe("r");
+  });
+
+  it("treeId が全ノードに付与される", () => {
+    const nodes = computeLayout(twoLeaves, 0, "myTree");
+    expect(nodes.every(n => n.treeId === "myTree")).toBe(true);
+  });
+
+  it("カスタム colW を指定するとその幅で計算される", () => {
+    const customColW = 200;
+    const nodes = computeLayout(singleLeaf, 0, "t1", customColW);
+    expect(nodes[0].cx).toBe(customColW / 2);
+  });
+
+  it("3階層ツリーで全ノードの位置が正しい", () => {
+    const nodes = computeLayout(threeLevel, 0, "t1");
+    const root = nodes.find(n => n.id === "r");
+    const a    = nodes.find(n => n.id === "a");
+    const a1   = nodes.find(n => n.id === "a1");
+    const a2   = nodes.find(n => n.id === "a2");
+    const b    = nodes.find(n => n.id === "b");
+
+    // ルートは葉3枚の中央 → col 1.5
+    expect(root.cx).toBe(1.5 * COL_W);
+    // a は葉2枚(a1,a2)の中央 → col 1.0
+    expect(a.cx).toBe(1.0 * COL_W);
+    // a1 は col 0.5、a2 は col 1.5、b は col 2.5
+    expect(a1.cx).toBe(0.5 * COL_W);
+    expect(a2.cx).toBe(1.5 * COL_W);
+    expect(b.cx).toBe(2.5 * COL_W);
+    // depth
+    expect(root.cy).toBe(ROW_H * 0.5);
+    expect(a.cy).toBe(ROW_H * 1.5);
+    expect(a1.cy).toBe(ROW_H * 2.5);
   });
 });

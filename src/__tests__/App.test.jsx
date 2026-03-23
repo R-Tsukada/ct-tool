@@ -198,6 +198,125 @@ describe("localStorage 永続化", () => {
   });
 });
 
+// ── プロジェクト操作 ──────────────────────────────────────────────
+describe("プロジェクト操作", () => {
+  it("サイドバーに初期プロジェクト名が表示される", () => {
+    render(<App />);
+    expect(screen.getByText("プロジェクト1")).toBeInTheDocument();
+  });
+
+  it("「＋ 新規プロジェクト」でプロジェクトが追加される", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByText("＋ 新規プロジェクト"));
+    const saved = JSON.parse(localStorage.getItem("ct-tool-projects"));
+    expect(saved.projects).toHaveLength(2);
+  });
+
+  it("新規プロジェクトの名前が「プロジェクト N」形式になる", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByText("＋ 新規プロジェクト"));
+    const saved = JSON.parse(localStorage.getItem("ct-tool-projects"));
+    expect(saved.projects[1].name).toMatch(/^プロジェクト\s*\d+$/);
+  });
+
+  it("新規プロジェクト追加後にそのプロジェクトがアクティブになる", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByText("＋ 新規プロジェクト"));
+    const saved = JSON.parse(localStorage.getItem("ct-tool-projects"));
+    expect(saved.activeId).toBe(saved.projects[1].id);
+  });
+
+  it("プロジェクトを切り替えると別のデータが表示される", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    // プロジェクト1でノードを編集
+    await user.click(screen.getByText("分類1"));
+    await user.clear(screen.getByDisplayValue("分類1"));
+    await user.type(screen.getByDisplayValue(""), "プロジェクト1専用{Enter}");
+
+    // 新規プロジェクトを追加
+    await user.click(screen.getByText("＋ 新規プロジェクト"));
+    // プロジェクト1専用 の文字は見えないはず（別プロジェクト）
+    expect(screen.queryByText("プロジェクト1専用")).not.toBeInTheDocument();
+
+    // プロジェクト1に戻す
+    await user.click(screen.getByText("プロジェクト1"));
+    expect(screen.getByText("プロジェクト1専用")).toBeInTheDocument();
+  });
+
+  it("プロジェクトのリネームが反映される", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    // リネームボタンをホバーで表示させてクリック
+    const projectItem = screen.getByText("プロジェクト1").closest("div");
+    fireEvent.mouseEnter(projectItem);
+    await user.click(screen.getByTitle("リネーム"));
+    const input = screen.getByDisplayValue("プロジェクト1");
+    await user.clear(input);
+    await user.type(input, "renamed{Enter}");
+    expect(screen.getByText("renamed")).toBeInTheDocument();
+  });
+
+  it("プロジェクトを削除するとリストから消える", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<App />);
+    // 2つにしてから削除
+    await user.click(screen.getByText("＋ 新規プロジェクト"));
+    // プロジェクト1に切り替えて削除
+    await user.click(screen.getByText("プロジェクト1"));
+    const projectItem = screen.getByText("プロジェクト1").closest("div");
+    fireEvent.mouseEnter(projectItem);
+    await user.click(within(projectItem).getByTitle("プロジェクトを削除"));
+    const saved = JSON.parse(localStorage.getItem("ct-tool-projects"));
+    expect(saved.projects).toHaveLength(1);
+  });
+
+  it("ホバーするとリネーム・削除ボタンが表示される", async () => {
+    render(<App />);
+    const projectItem = screen.getByText("プロジェクト1").closest("div");
+    // ホバー前はボタンが見えない（opacity:0）
+    fireEvent.mouseLeave(projectItem);
+    const btnsBefore = within(projectItem).queryAllByRole("button");
+    const allHidden = btnsBefore.every(b => b.style.opacity === "0" || b.style.opacity === "");
+    expect(allHidden).toBe(true);
+    // ホバー後はボタンが見える
+    fireEvent.mouseEnter(projectItem);
+    expect(within(projectItem).getByTitle("リネーム")).toBeInTheDocument();
+    expect(within(projectItem).getByTitle("プロジェクトを削除")).toBeInTheDocument();
+  });
+
+  it("最後の1件はプロジェクトを削除できない", () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<App />);
+    const projectItem = screen.getByText("プロジェクト1").closest("div");
+    fireEvent.mouseEnter(projectItem);
+    const delBtn = screen.getByTitle("プロジェクトを削除");
+    expect(delBtn).toBeDisabled();
+  });
+});
+
+// ── マイグレーション ──────────────────────────────────────────────
+describe("マイグレーション", () => {
+  it("旧形式(ct-tool-data)があれば新形式に取り込まれる", () => {
+    const legacy = {
+      trees: [{ id: "t1", root: { id: "n1", name: "旧分類", children: [] } }],
+      testCases: [{ id: "tc1", sel: {} }],
+    };
+    localStorage.setItem("ct-tool-data", JSON.stringify(legacy));
+    render(<App />);
+    // 旧データのツリー名が表示されること（tree + matrixで複数出る）
+    expect(screen.getAllByText("旧分類").length).toBeGreaterThan(0);
+    // 新形式で保存されること
+    const saved = JSON.parse(localStorage.getItem("ct-tool-projects"));
+    expect(saved.projects).toHaveLength(1);
+    expect(saved.projects[0].trees[0].root.name).toBe("旧分類");
+  });
+});
+
 // ── Markdown エクスポート ─────────────────────────────────────────
 describe("Markdownエクスポート", () => {
   it("「MD コピー」でクリップボードにMarkdownが書き込まれる", async () => {

@@ -3,6 +3,7 @@ import { useState } from "react";
 export default function Sidebar({ store, onSwitch, onAdd, onRename, onDelete }) {
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState("");
+  const [hoveredId, setHoveredId] = useState(null);
 
   const startRename = (e, project) => {
     e.stopPropagation();
@@ -35,22 +36,26 @@ export default function Sidebar({ store, onSwitch, onAdd, onRename, onDelete }) 
 
       <div style={{ flex: 1, overflowY: "auto", padding: "8px 8px" }}>
         {store.projects.map(project => {
-          const isActive = project.id === store.activeId;
+          const isActive  = project.id === store.activeId;
           const isEditing = editingId === project.id;
+          const isHovered = hoveredId === project.id;
+
+          let bg = isActive ? "#18181B" : isHovered ? "#E4E4E7" : "transparent";
+
           return (
             <div
               key={project.id}
               onClick={() => !isEditing && onSwitch(project.id)}
+              onMouseEnter={() => setHoveredId(project.id)}
+              onMouseLeave={() => setHoveredId(null)}
               style={{
                 display: "flex", alignItems: "center", gap: 6,
                 padding: "7px 10px", borderRadius: 6, marginBottom: 2,
                 cursor: isEditing ? "default" : "pointer",
-                background: isActive ? "#18181B" : "transparent",
+                background: bg,
                 color: isActive ? "#FFFFFF" : "#52525B",
                 transition: "background 0.1s",
               }}
-              onMouseEnter={e => !isActive && !isEditing && (e.currentTarget.style.background = "#E4E4E7")}
-              onMouseLeave={e => !isActive && !isEditing && (e.currentTarget.style.background = "transparent")}
             >
               {isEditing ? (
                 <input
@@ -72,11 +77,11 @@ export default function Sidebar({ store, onSwitch, onAdd, onRename, onDelete }) 
                 </span>
               )}
               {!isEditing && (
-                <div style={{ display: "flex", gap: 2, flexShrink: 0, opacity: isActive ? 0.7 : 0 }}
-                  className="proj-actions"
-                  onMouseEnter={e => { e.currentTarget.style.opacity = "1"; e.stopPropagation(); }}
-                  onMouseLeave={e => { e.currentTarget.style.opacity = isActive ? "0.7" : "0"; }}
-                >
+                <div style={{
+                  display: "flex", gap: 2, flexShrink: 0,
+                  opacity: (isHovered || isActive) ? 1 : 0,
+                  transition: "opacity 0.1s",
+                }}>
                   <button
                     title="リネーム"
                     onClick={e => startRename(e, project)}
