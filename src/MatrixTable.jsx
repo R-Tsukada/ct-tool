@@ -15,7 +15,7 @@ export default function MatrixTable({ layout, testCases, onToggle, onAddTC, onDe
                 <th key={leaf.id} style={{
                   width: effectiveColW, minWidth: effectiveColW, maxWidth: effectiveColW,
                   fontSize: 10.5, fontWeight: 600, color: "#71717A",
-                  textAlign: "center", padding: "8px 3px",
+                  textAlign: "center", paddingTop: 8, paddingBottom: 8,
                   borderBottom: "2px solid #D4D4D8",
                   borderLeft: prev?.treeId === leaf.treeId ? "1px solid #F4F4F5" : "2px dashed #D4D4D8",
                   background: "#FAFAFA", wordBreak: "break-all",

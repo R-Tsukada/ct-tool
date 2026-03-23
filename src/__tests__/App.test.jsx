@@ -366,3 +366,18 @@ describe("Markdownエクスポート", () => {
     expect(screen.getByText("✓ コピー済み")).toBeInTheDocument();
   });
 });
+
+// ── マトリクス列幅の整合性 ────────────────────────────────────────
+describe("マトリクス列幅の整合性", () => {
+  it("葉ノードのthに水平パディングがなく、ツリーキャンバスと幅がズレない", () => {
+    render(<App />);
+    const table = document.querySelector("table");
+    // thead の最初の th（ラベル列）を除いた葉ノード列ヘッダー
+    const leafThs = Array.from(table.querySelectorAll("thead th")).slice(1);
+    expect(leafThs.length).toBeGreaterThan(0);
+    leafThs.forEach(th => {
+      expect(th.style.paddingLeft).not.toBe("3px");
+      expect(th.style.paddingRight).not.toBe("3px");
+    });
+  });
+});
